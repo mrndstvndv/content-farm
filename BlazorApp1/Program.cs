@@ -8,7 +8,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddHttpClient();
-builder.Services.AddScoped<RedditService>();
+builder.Services.AddSingleton<RedditService>();
 
 
 var app = builder.Build();

@@ -2,8 +2,8 @@
 @rendermode InteractiveServer
 @inject RedditService Reddit
 
-<input @bind="url" placeholder="Paste a Reddit post URL" class="form-control mb-2" />
-<button @onclick="GetPost" class="btn btn-primary">run</button>
+<input @bind="url" placeholder="Paste a Reddit post URL" class="form-control mb-2 border" />
+<button @onclick="GetPost" class="border">run</button>
 
 @if (error is not null)
 {
@@ -32,11 +32,7 @@
         title = null;
         body = null;
 
-        // Force old.reddit.com regardless of what subdomain they typed
-        var uri = new Uri(url);
-        var fixedUrl = new UriBuilder(uri) { Host = "old.reddit.com" }.Uri.ToString();
-
-        var result = await Reddit.GetPost(fixedUrl);
+        var result = await Reddit.GetPost(url);
 
         error = result.Error;
         title = result.Title;

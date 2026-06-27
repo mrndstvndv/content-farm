@@ -4,14 +4,15 @@ namespace BlazorApp1.Services;
 
 public class RedditService(IHttpClientFactory clientFactory)
 {
+    private static readonly string UserAgent =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
     public async Task<(string? Error, string? Title, string? Text)> GetPost(string url)
     {
-        var resolved = await GetOldRedditUrl(url);
-
         var client = clientFactory.CreateClient();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
 
+        var resolved = await ResolveUrl(url, client);
         var html = await client.GetStringAsync(resolved);
 
         var doc = new HtmlDocument();
@@ -34,7 +35,7 @@ public class RedditService(IHttpClientFactory clientFactory)
         return (errors.Count > 0 ? string.Join("; ", errors) : null, title, body);
     }
 
-    private async Task<string> GetOldRedditUrl(string url)
+    private static async Task<string> ResolveUrl(string url, HttpClient client)
     {
         var uri = new Uri(url);
 
@@ -45,10 +46,6 @@ public class RedditService(IHttpClientFactory clientFactory)
         if (uri.AbsolutePath.Contains("/s/"))
         {
             var resolveUri = new UriBuilder(uri) { Host = "www.reddit.com" }.Uri;
-
-            var client = clientFactory.CreateClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36");
 
             using var response = await client.SendAsync(
                 new HttpRequestMessage(HttpMethod.Head, resolveUri),
