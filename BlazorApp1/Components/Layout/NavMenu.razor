@@ -1,0 +1,29 @@
+﻿<div class="top-row ps-3 flex items-center">
+    <div class="flex-1">
+        <a class="no-underline text-white text-lg" href="">BlazorApp1</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler"/>
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex flex-col">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link flex items-center h-12 w-full rounded px-3 no-underline text-[#d7d7d7] hover:text-white hover:bg-white/10" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link flex items-center h-12 w-full rounded px-3 no-underline text-[#d7d7d7] hover:text-white hover:bg-white/10" href="counter">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link flex items-center h-12 w-full rounded px-3 no-underline text-[#d7d7d7] hover:text-white hover:bg-white/10" href="weather">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            </NavLink>
+        </div>
+    </nav>
+</div>

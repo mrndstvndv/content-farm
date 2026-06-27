@@ -1,0 +1,45 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject RedditService Reddit
+
+<input @bind="url" placeholder="Paste a Reddit post URL" class="form-control mb-2" />
+<button @onclick="GetPost" class="btn btn-primary">run</button>
+
+@if (error is not null)
+{
+    <p class="text-danger">@error</p>
+}
+
+@if (title is not null)
+{
+    <h2>@title</h2>
+}
+
+@if (body is not null)
+{
+    <div>@body</div>
+}
+
+@code {
+    string url = "https://www.reddit.com/r/buhaydigital/comments/1uf64ez/wfh_things_that_make_me_feel_rich_for_no_reason/";
+    string? error;
+    string? title;
+    string? body;
+
+    public async Task GetPost()
+    {
+        error = null;
+        title = null;
+        body = null;
+
+        // Force old.reddit.com regardless of what subdomain they typed
+        var uri = new Uri(url);
+        var fixedUrl = new UriBuilder(uri) { Host = "old.reddit.com" }.Uri.ToString();
+
+        var result = await Reddit.GetPost(fixedUrl);
+
+        error = result.Error;
+        title = result.Title;
+        body = result.Text;
+    }
+}
