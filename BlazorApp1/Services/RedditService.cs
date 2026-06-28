@@ -4,7 +4,7 @@ using SkiaSharp;
 
 namespace BlazorApp1.Services;
 
-public record PostData(string Title, string Body);
+public record PostData(string Title, string Body, string Author);
 
 public class RedditException(string message, Exception? inner = null)
     : Exception(message, inner);
@@ -47,15 +47,18 @@ public class RedditService(IHttpClientFactory clientFactory)
         if (title is null)
             throw new RedditPostNotFoundException(url, "title not found");
 
-        var body = doc.DocumentNode.SelectSingleNode(
-            "//div[contains(@class, 'thing') and contains(@data-type, 'link')]")
-            ?.SelectSingleNode(".//div[contains(@class, 'usertext-body')]//div[contains(@class, 'md')]")
+        var postNode = doc.DocumentNode.SelectSingleNode(
+            "//div[contains(@class, 'thing') and contains(@data-type, 'link')]");
+
+        var body = postNode?.SelectSingleNode(".//div[contains(@class, 'usertext-body')]//div[contains(@class, 'md')]")
             ?.InnerText.Trim();
 
         if (body is null)
             throw new RedditPostNotFoundException(url, "body not found");
 
-        return new PostData(title, body);
+        var author = postNode?.GetAttributeValue("data-author", "username") ?? "username";
+
+        return new PostData(title, body, author);
     }
 
     private static async Task<string> ResolveUrl(string url, HttpClient client)
@@ -101,60 +104,471 @@ public class RedditService(IHttpClientFactory clientFactory)
         return new UriBuilder(uri) { Host = "old.reddit.com" }.Uri.ToString();
     }
 
-    public async Task GenerateTitleCard(string title)
+    private static SKTypeface GetTypeface(bool bold)
+    {
+        var weight = bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
+        var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+        
+        string[] fontFamilies = { "Inter", "Helvetica Neue", "Helvetica", "Arial", "Segoe UI" };
+        foreach (var family in fontFamilies)
+        {
+            try
+            {
+                var tf = SKTypeface.FromFamilyName(family, style);
+                if (tf != null && !tf.FamilyName.Equals("Portable User Interface", StringComparison.OrdinalIgnoreCase))
+                {
+                    return tf;
+                }
+            }
+            catch { }
+        }
+        return SKTypeface.Default;
+    }
+
+    private static void DrawUpArrow(SKCanvas canvas, float x, float y, float size, bool isLightTheme)
+    {
+        using var paint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(87, 111, 118) : new SKColor(215, 218, 220),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 2.5f,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round
+        };
+        
+        using var path = new SKPath();
+        float w = size * 0.8f;
+        float h = size * 0.9f;
+        
+        path.MoveTo(x, y - h/2);
+        path.LineTo(x - w/2, y - h/2 + w/2);
+        path.LineTo(x - w/4, y - h/2 + w/2);
+        path.LineTo(x - w/4, y + h/2);
+        path.LineTo(x + w/4, y + h/2);
+        path.LineTo(x + w/4, y - h/2 + w/2);
+        path.LineTo(x + w/2, y - h/2 + w/2);
+        path.Close();
+        
+        canvas.DrawPath(path, paint);
+    }
+
+    private static void DrawDownArrow(SKCanvas canvas, float x, float y, float size, bool isLightTheme)
+    {
+        using var paint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(87, 111, 118) : new SKColor(215, 218, 220),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 2.5f,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round
+        };
+        
+        using var path = new SKPath();
+        float w = size * 0.8f;
+        float h = size * 0.9f;
+        
+        path.MoveTo(x, y + h/2);
+        path.LineTo(x - w/2, y + h/2 - w/2);
+        path.LineTo(x - w/4, y + h/2 - w/2);
+        path.LineTo(x - w/4, y - h/2);
+        path.LineTo(x + w/4, y - h/2);
+        path.LineTo(x + w/4, y + h/2 - w/2);
+        path.LineTo(x + w/2, y + h/2 - w/2);
+        path.Close();
+        
+        canvas.DrawPath(path, paint);
+    }
+
+    private static void DrawCommentIcon(SKCanvas canvas, float x, float y, float size, bool isLightTheme)
+    {
+        using var paint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(87, 111, 118) : new SKColor(215, 218, 220),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 2.5f,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round
+        };
+        
+        using var path = new SKPath();
+        float w = size * 0.55f; 
+        float h = size * 0.45f; 
+        float r = size * 0.25f; 
+        
+        path.ArcTo(new SKRect(x - w, y - h, x - w + 2*r, y - h + 2*r), 180, 90, false);
+        path.ArcTo(new SKRect(x + w - 2*r, y - h, x + w, y - h + 2*r), 270, 90, false);
+        path.ArcTo(new SKRect(x + w - 2*r, y + h - 2*r, x + w, y + h), 0, 90, false);
+        path.LineTo(x - w + 2*r, y + h);
+        path.LineTo(x - w - size * 0.15f, y + h + size * 0.15f);
+        path.LineTo(x - w, y + h - r);
+        path.Close();
+        
+        canvas.DrawPath(path, paint);
+    }
+
+    private static SKTypeface GetEmojiTypeface()
+    {
+        string[] emojiFonts = { "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji" };
+        foreach (var family in emojiFonts)
+        {
+            try
+            {
+                var tf = SKTypeface.FromFamilyName(family);
+                if (tf != null && !tf.FamilyName.Equals("Portable User Interface", StringComparison.OrdinalIgnoreCase))
+                {
+                    return tf;
+                }
+            }
+            catch { }
+        }
+        return SKTypeface.Default;
+    }
+
+    private static bool IsEmoji(string s, int index, out int charCount)
+    {
+        if (index >= s.Length)
+        {
+            charCount = 0;
+            return false;
+        }
+
+        int codePoint = char.ConvertToUtf32(s, index);
+        charCount = char.IsSurrogatePair(s, index) ? 2 : 1;
+
+        if ((codePoint >= 0x1F600 && codePoint <= 0x1F64F) || // Emoticons
+            (codePoint >= 0x1F300 && codePoint <= 0x1F5FF) || // Misc Symbols/Pictographs
+            (codePoint >= 0x1F680 && codePoint <= 0x1F6FF) || // Transport/Map
+            (codePoint >= 0x1F900 && codePoint <= 0x1F9FF) || // Supplemental Pictographs
+            (codePoint >= 0x1FA70 && codePoint <= 0x1FAFF) || // Pictographs Extended-A
+            (codePoint >= 0x2600 && codePoint <= 0x27BF) ||  // Misc Symbols & Dingbats
+            (codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF))   // Flags
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static float MeasureTextWithEmoji(string text, SKFont textFont, SKFont emojiFont)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        float width = 0;
+        int i = 0;
+        while (i < text.Length)
+        {
+            bool currentIsEmoji = IsEmoji(text, i, out int len);
+            int start = i;
+            i += len;
+            while (i < text.Length && IsEmoji(text, i, out int nextLen) == currentIsEmoji)
+            {
+                i += nextLen;
+            }
+
+            var runText = text.Substring(start, i - start);
+            var font = currentIsEmoji ? emojiFont : textFont;
+            width += font.MeasureText(runText);
+        }
+        return width;
+    }
+
+    private static void DrawTextWithEmoji(SKCanvas canvas, string text, float x, float y, SKTextAlign align, SKFont textFont, SKFont emojiFont, SKPaint paint)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+
+        var runs = new List<(string Content, bool IsEmoji)>();
+        int i = 0;
+        while (i < text.Length)
+        {
+            bool currentIsEmoji = IsEmoji(text, i, out int len);
+            int start = i;
+            i += len;
+            while (i < text.Length && IsEmoji(text, i, out int nextLen) == currentIsEmoji)
+            {
+                i += nextLen;
+            }
+
+            runs.Add((text.Substring(start, i - start), currentIsEmoji));
+        }
+
+        float totalWidth = 0;
+        foreach (var run in runs)
+        {
+            var font = run.IsEmoji ? emojiFont : textFont;
+            totalWidth += font.MeasureText(run.Content);
+        }
+
+        float currentX = x;
+        if (align == SKTextAlign.Center)
+        {
+            currentX = x - totalWidth / 2;
+        }
+        else if (align == SKTextAlign.Right)
+        {
+            currentX = x - totalWidth;
+        }
+
+        foreach (var run in runs)
+        {
+            var font = run.IsEmoji ? emojiFont : textFont;
+            canvas.DrawText(run.Content, currentX, y, SKTextAlign.Left, font, paint);
+            currentX += font.MeasureText(run.Content);
+        }
+    }
+
+    public async Task<byte[]> GenerateTitleCard(
+        string title,
+        string subreddit,
+        string subredditIconPath,
+        bool isLightTheme = false,
+        string votes = "4.1K",
+        string comments = "2.2K",
+        string timeAgo = "2d ago",
+        string username = "")
     {
         int w = 1080, h = 1920;
+        float cardW = 920;
+        float cardX = (w - cardW) / 2;
+        float cornerRadius = 24;
+        float padding = 32;
+        float headerTitleGap = 18;
+        float titleFooterGap = 24;
+        float footerHeight = 54;
+
+        // Wrapped title text lines
+        var titleTypeface = GetTypeface(bold: true);
+        var titleFont = new SKFont(titleTypeface, 38);
+        var emojiTypeface = GetEmojiTypeface();
+        var emojiFont = new SKFont(emojiTypeface, 38);
+        var wrappedLines = WrapText(title, (int)(cardW - padding * 2), titleFont, emojiFont);
+        if (wrappedLines.Count == 0) wrappedLines.Add("");
+
+        float titleLineHeight = 52;
+        float titleHeight = wrappedLines.Count * titleLineHeight;
+
+        // Calculate card height dynamically (tight wrap)
+        float headerHeight = 58;
+        float totalContentHeight = padding + headerHeight + headerTitleGap + titleHeight + titleFooterGap + footerHeight + padding;
+        float cardH = totalContentHeight;
+        float cardY = (h - cardH) / 2;
+
         using var bitmap = new SKBitmap(w, h);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
 
-        // Card dimensions — centered on a 1080x1920 canvas
-        float cardW = 920, cardH = 600;
-        float cardX = (w - cardW) / 2;
-        float cardY = (h - cardH) / 2;
-        float cornerRadius = 20;
-        float padding = 40;
-
+        // Background of the card
         var bgPaint = new SKPaint
         {
-            Color = new SKColor(26, 26, 27, 240),
+            Color = isLightTheme ? SKColors.White : new SKColor(15, 20, 22),
             IsAntialias = true,
             Style = SKPaintStyle.Fill,
         };
-        
         canvas.DrawRoundRect(cardX, cardY, cardW, cardH, cornerRadius, cornerRadius, bgPaint);
 
-        var typeface = SKTypeface.Default;
-        var font = new SKFont(typeface, 38);
-        var textPaint = new SKPaint
+        if (isLightTheme)
         {
-            Color = SKColors.White,
-            IsAntialias = true,
+            using var borderPaint = new SKPaint
+            {
+                Color = new SKColor(220, 224, 230),
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 1.5f
+            };
+            canvas.DrawRoundRect(cardX, cardY, cardW, cardH, cornerRadius, cornerRadius, borderPaint);
+        }
+
+        float topY = cardY + padding;
+        float leftX = cardX + padding;
+        float rightX = cardX + cardW - padding;
+
+        // 1. Subreddit Icon
+        float iconSize = 50;
+        var iconRect = new SKRect(leftX, topY, leftX + iconSize, topY + iconSize);
+        canvas.Save();
+        using var clipPath = new SKPath();
+        clipPath.AddCircle(leftX + iconSize / 2, topY + iconSize / 2, iconSize / 2);
+        canvas.ClipPath(clipPath, SkiaSharp.SKClipOperation.Intersect, true);
+
+        SKBitmap? iconBitmap = null;
+        if (!string.IsNullOrWhiteSpace(subredditIconPath))
+        {
+            try
+            {
+                if (subredditIconPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    subredditIconPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var client = clientFactory.CreateClient();
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+                    var bytes = await client.GetByteArrayAsync(subredditIconPath);
+                    iconBitmap = SKBitmap.Decode(bytes);
+                }
+                else if (File.Exists(subredditIconPath))
+                {
+                    iconBitmap = SKBitmap.Decode(subredditIconPath);
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+        }
+
+        if (iconBitmap != null)
+        {
+            canvas.DrawBitmap(iconBitmap, iconRect, new SKPaint { IsAntialias = true });
+            iconBitmap.Dispose();
+        }
+        else
+        {
+            // Draw default reddit logo-like orange-red circle
+            using var defaultBgPaint = new SKPaint
+            {
+                Color = new SKColor(255, 69, 0),
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill
+            };
+            canvas.DrawCircle(leftX + iconSize / 2, topY + iconSize / 2, iconSize / 2, defaultBgPaint);
+
+            using var defaultTextPaint = new SKPaint
+            {
+                Color = SKColors.White,
+                IsAntialias = true
+            };
+            var defaultFont = new SKFont(GetTypeface(bold: true), 28);
+            canvas.DrawText("r", leftX + iconSize / 2, topY + 34, SKTextAlign.Center, defaultFont, defaultTextPaint);
+        }
+        canvas.Restore();
+
+        // 2. Subreddit Name, Username, and Date
+        float textX = leftX + iconSize + 15;
+
+        var subTypefaceBold = GetTypeface(bold: true);
+        var subTypefaceNormal = GetTypeface(bold: false);
+
+        var subFont = new SKFont(subTypefaceBold, 26);
+        using var subPaint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(26, 26, 27) : SKColors.White,
+            IsAntialias = true
+        };
+        canvas.DrawText(subreddit, textX, topY + 20, SKTextAlign.Left, subFont, subPaint);
+
+        var metaFont = new SKFont(subTypefaceNormal, 22);
+        using var metaPaint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(87, 111, 118) : new SKColor(135, 149, 161),
+            IsAntialias = true
         };
 
-        var wrappedLines = WrapText(title, (int)(cardW - padding * 2), font);
-        if (wrappedLines.Count == 0) wrappedLines.Add("");
+        string line2Text = "";
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            string cleanUsername = username.StartsWith("u/", StringComparison.OrdinalIgnoreCase) ? username : $"u/{username}";
+            line2Text = $"{cleanUsername} • {timeAgo}";
+        }
+        else
+        {
+            line2Text = timeAgo;
+        }
 
-        // Total text block height
-        float lineHeight = 50;
-        float textBlockHeight = wrappedLines.Count * lineHeight;
+        canvas.DrawText(line2Text, textX, topY + 48, SKTextAlign.Left, metaFont, metaPaint);
 
-        // Vertically center the text block within the card
-        float startY = cardY + (cardH - textBlockHeight) / 2 + lineHeight * 0.8f;
+        // 3. Ellipsis
+        var ellipsisFont = new SKFont(subTypefaceBold, 32);
+        using var ellipsisPaint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(87, 111, 118) : new SKColor(135, 149, 161),
+            IsAntialias = true
+        };
+        canvas.DrawText("...", rightX - 15, topY + 31, SKTextAlign.Center, ellipsisFont, ellipsisPaint);
 
+        // 4. Title Text
+        float titleTopY = topY + iconSize + headerTitleGap;
+        using var titleTextPaint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(26, 26, 27) : SKColors.White,
+            IsAntialias = true
+        };
+
+        float currentY = titleTopY + 36;
         foreach (var line in wrappedLines)
         {
-            // Horizontally center each line within the card
-            canvas.DrawText(line, cardX + cardW / 2, startY, SKTextAlign.Center, font, textPaint);
-            startY += lineHeight;
+            DrawTextWithEmoji(canvas, line, leftX, currentY, SKTextAlign.Left, titleFont, emojiFont, titleTextPaint);
+            currentY += titleLineHeight;
         }
-        
+
+        // 5. Footer Buttons
+        float footerTopY = cardY + cardH - padding - footerHeight;
+        float pillHeight = footerHeight;
+        float pillCornerRadius = pillHeight / 2;
+
+        using var pillBgPaint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(237, 239, 241) : new SKColor(30, 43, 48),
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+
+        var footerFont = new SKFont(subTypefaceBold, 24);
+        using var footerTextPaint = new SKPaint
+        {
+            Color = isLightTheme ? new SKColor(26, 26, 27) : SKColors.White,
+            IsAntialias = true
+        };
+
+        // Draw Up/Down vote pill
+        float voteTextWidth = footerFont.MeasureText(votes);
+        float votePillPaddingX = 24;
+        float arrowSize = 20;
+        float arrowTextGap = 10;
+        float votePillWidth = votePillPaddingX + arrowSize + arrowTextGap + voteTextWidth + arrowTextGap + arrowSize + votePillPaddingX;
+        var votePillRect = new SKRect(leftX, footerTopY, leftX + votePillWidth, footerTopY + pillHeight);
+        canvas.DrawRoundRect(votePillRect, pillCornerRadius, pillCornerRadius, pillBgPaint);
+
+        float upArrowX = leftX + votePillPaddingX + arrowSize / 2;
+        float pillCenterY = footerTopY + pillHeight / 2;
+        DrawUpArrow(canvas, upArrowX, pillCenterY, arrowSize, isLightTheme);
+
+        float voteTextX = leftX + votePillPaddingX + arrowSize + arrowTextGap;
+        canvas.DrawText(votes, voteTextX, pillCenterY + 8, SKTextAlign.Left, footerFont, footerTextPaint);
+
+        float downArrowX = voteTextX + voteTextWidth + arrowTextGap + arrowSize / 2;
+        DrawDownArrow(canvas, downArrowX, pillCenterY, arrowSize, isLightTheme);
+
+        // Draw Comments pill
+        float commentTextWidth = footerFont.MeasureText(comments);
+        float commentPillPaddingX = 24;
+        float commentPillWidth = commentPillPaddingX + arrowSize + arrowTextGap + commentTextWidth + commentPillPaddingX;
+        float commentPillX = leftX + votePillWidth + 16;
+        var commentPillRect = new SKRect(commentPillX, footerTopY, commentPillX + commentPillWidth, footerTopY + pillHeight);
+        canvas.DrawRoundRect(commentPillRect, pillCornerRadius, pillCornerRadius, pillBgPaint);
+
+        float commentIconX = commentPillX + commentPillPaddingX + arrowSize / 2;
+        DrawCommentIcon(canvas, commentIconX, pillCenterY, arrowSize, isLightTheme);
+
+        float commentTextX = commentPillX + commentPillPaddingX + arrowSize + arrowTextGap;
+        canvas.DrawText(comments, commentTextX, pillCenterY + 8, SKTextAlign.Left, footerFont, footerTextPaint);
+
+        // Save image to disk
         using var image = SKImage.FromBitmap(bitmap);
         var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        await File.WriteAllBytesAsync("/Volumes/realme/Dev/content-farm/reddit/ballers.png", data.ToArray());
+        
+        try
+        {
+            await File.WriteAllBytesAsync("/Volumes/realme/Dev/content-farm/reddit/ballers.png", data.ToArray());
+        }
+        catch
+        {
+            // Fallback: write to current directory if parent path is not writable/present
+            await File.WriteAllBytesAsync("ballers.png", data.ToArray());
+        }
+
+        return data.ToArray();
     }
 
-    private static List<string> WrapText(string text, int maxWidth, SKFont font)
+    private static List<string> WrapText(string text, int maxWidth, SKFont font, SKFont emojiFont)
     {
         var words = text.Split(' ');
         var lines = new List<string>();
@@ -166,7 +580,7 @@ public class RedditService(IHttpClientFactory clientFactory)
                 ? word
                 : string.Join(" ", currentLine.Append(word));
 
-            float width = font.MeasureText(testLine);
+            float width = MeasureTextWithEmoji(testLine, font, emojiFont);
 
             if (width <= maxWidth)
             {
