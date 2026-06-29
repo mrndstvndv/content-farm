@@ -1,0 +1,109 @@
+@page "/edge-tts"
+@rendermode InteractiveServer
+
+<div class="min-h-screen bg-white dark:bg-black text-neutral-900 dark:text-neutral-200 p-6 transition-colors duration-300">
+    <div class="max-w-2xl mx-auto border border-neutral-200 dark:border-neutral-800 rounded-lg p-6 bg-white dark:bg-black">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">Edge TTS Demo</h1>
+            <p class="text-neutral-500 dark:text-neutral-400 text-sm mt-1">Synthesize speech using Microsoft Edge's TTS engine</p>
+        </header>
+
+        <div class="space-y-4">
+            <!-- Text input -->
+            <div class="flex flex-col gap-1.5">
+                <span class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Text to Speak</span>
+                <textarea @bind="text"
+                          rows="4"
+                          class="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 focus:border-black dark:focus:border-white focus:ring-1 focus:ring-black dark:focus:ring-white rounded px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 w-full focus:outline-none transition-colors resize-y"
+                          placeholder="Enter text to synthesize..."></textarea>
+            </div>
+
+            <!-- Voice & Rate -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="flex flex-col gap-1.5">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Voice</span>
+                    <select @bind="voice"
+                            class="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 focus:border-black dark:focus:border-white focus:ring-1 focus:ring-black dark:focus:ring-white rounded px-3 py-2 text-xs text-neutral-900 dark:text-neutral-100 focus:outline-none transition-colors">
+                        @foreach (var v in Voices)
+                        {
+                            <option value="@v.Value">@v.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Speed: @rate%</span>
+                    <input type="range" min="-50" max="50" step="5" @bind="rate"
+                           class="w-full accent-black dark:accent-white cursor-pointer" />
+                </div>
+            </div>
+
+            <!-- Error -->
+            @if (error is not null)
+            {
+                <div class="border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-xs p-3 rounded">
+                    @error
+                </div>
+            }
+
+            <!-- Synthesize button -->
+            <button @onclick="Synthesize"
+                    disabled="@(busy || string.IsNullOrWhiteSpace(text))"
+                    class="bg-neutral-950 dark:bg-white hover:bg-neutral-900 dark:hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed text-white dark:text-black text-sm font-semibold w-full py-2.5 rounded transition-colors">
+                @(busy ? "Synthesizing..." : "Synthesize")
+            </button>
+        </div>
+
+        <!-- Audio Player -->
+        @if (audioDataUrl is not null)
+        {
+            <div class="mt-6 border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3">
+                <div class="flex flex-col gap-1.5">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Audio</span>
+                    <audio controls class="w-full" src="@audioDataUrl"></audio>
+                </div>
+
+                <div class="flex gap-2">
+                    <a href="@audioDataUrl" download="edge-tts-output.mp3"
+                       class="inline-flex items-center justify-center bg-neutral-950 dark:bg-white hover:bg-neutral-900 dark:hover:bg-neutral-100 text-white dark:text-black text-xs font-semibold px-4 py-2 rounded transition-colors">
+                        Download MP3
+                    </a>
+                    <span class="text-xs text-neutral-500 dark:text-neutral-400 self-center">
+                        @(audioSizeBytes.HasValue ? $"{audioSizeBytes.Value / 1024.0:F1} KB" : "")
+                    </span>
+                </div>
+
+                <!-- Word boundaries -->
+                @if (wordBoundaries.Count > 0)
+                {
+                    <div class="flex flex-col gap-1.5">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                            Word Boundaries (@wordBoundaries.Count)
+                        </span>
+                        <div class="max-h-48 overflow-y-auto border border-neutral-200 dark:border-neutral-800 rounded text-xs font-mono">
+                            <table class="w-full border-collapse">
+                                <thead class="sticky top-0 bg-neutral-100 dark:bg-neutral-900">
+                                    <tr>
+                                        <th class="text-left px-2 py-1 text-neutral-500 dark:text-neutral-400">Word</th>
+                                        <th class="text-left px-2 py-1 text-neutral-500 dark:text-neutral-400">Start</th>
+                                        <th class="text-left px-2 py-1 text-neutral-500 dark:text-neutral-400">End</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var wb in wordBoundaries)
+                                    {
+                                        <tr class="border-t border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                                            <td class="px-2 py-0.5">@wb.Text</td>
+                                            <td class="px-2 py-0.5 text-neutral-500">@wb.StartSec.ToString("F2")s</td>
+                                            <td class="px-2 py-0.5 text-neutral-500">@wb.EndSec.ToString("F2")s</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>

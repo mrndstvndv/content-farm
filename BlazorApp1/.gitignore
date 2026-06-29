@@ -16,6 +16,9 @@ wwwroot/css/app.min.css
 *.swp
 *.swo
 
+# Generated outputs
+outputs/
+
 # OS
 .DS_Store
 Thumbs.db

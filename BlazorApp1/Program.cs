@@ -1,4 +1,5 @@
 using BlazorApp1.Components;
+using BlazorApp1.Models;
 using BlazorApp1.Services;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +12,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<RedditService>();
+builder.Services.AddSingleton<RedditCardService>();
 builder.Services.AddSingleton<EdgeTtsService>();
 
 
