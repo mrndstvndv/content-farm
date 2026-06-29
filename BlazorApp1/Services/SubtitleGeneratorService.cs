@@ -30,51 +30,63 @@ public class SubtitleGeneratorService
     /// </summary>
     public string Generate(IReadOnlyList<WordBoundary> boundaries, AssStyle? style = null)
     {
+        return Generate(boundaries, 0.0, style);
+    }
+
+    /// <summary>
+    /// Generates an ASS subtitle string from word boundaries, shifted by an offset in seconds.
+    /// </summary>
+    public string Generate(IReadOnlyList<WordBoundary> boundaries, double offsetSec, AssStyle? style = null)
+    {
         style ??= AssStyle.Default;
 
         if (boundaries.Count == 0)
             return MinimalAssFile(style);
 
-        var dialogs = BuildDialogues(boundaries, style);
+        var dialogs = BuildDialogues(boundaries, offsetSec, style);
         return BuildAssFile(style, dialogs);
     }
 
     /// <summary>
     /// Saves an ASS subtitle file to disk.
     /// </summary>
-    public async Task SaveAsync(string path, IReadOnlyList<WordBoundary> boundaries, AssStyle? style = null, CancellationToken ct = default)
+    public Task SaveAsync(string path, IReadOnlyList<WordBoundary> boundaries, AssStyle? style = null, CancellationToken ct = default)
     {
-        var ass = Generate(boundaries, style);
+        return SaveAsync(path, boundaries, 0.0, style, ct);
+    }
+
+    /// <summary>
+    /// Saves an ASS subtitle file to disk, shifted by an offset in seconds.
+    /// </summary>
+    public async Task SaveAsync(string path, IReadOnlyList<WordBoundary> boundaries, double offsetSec, AssStyle? style = null, CancellationToken ct = default)
+    {
+        var ass = Generate(boundaries, offsetSec, style);
         await File.WriteAllTextAsync(path, ass, ct);
     }
 
     // ─── Dialog building ───────────────────────────────────────────
 
-    private static List<AssDialogue> BuildDialogues(IReadOnlyList<WordBoundary> boundaries, AssStyle style)
+    private static List<AssDialogue> BuildDialogues(IReadOnlyList<WordBoundary> boundaries, double offsetSec, AssStyle style)
     {
         var dialogs = new List<AssDialogue>(boundaries.Count);
 
         for (int i = 0; i < boundaries.Count; i++)
         {
             var wb = boundaries[i];
-            var start = wb.StartSec;
-            var end = wb.EndSec;
+            var start = wb.StartSec + offsetSec;
+            var end = wb.EndSec + offsetSec;
 
             // Ensure minimum visible duration so words don't flash
             if (end - start < style.MinDurationSec)
                 end = start + style.MinDurationSec;
 
-            // Prevent overlapping — if this word ends after the next starts, clamp
+            // Prevent overlapping — if this word ends after the next starts, clamp strictly
             if (i + 1 < boundaries.Count)
             {
-                var nextStart = boundaries[i + 1].StartSec;
+                var nextStart = boundaries[i + 1].StartSec + offsetSec;
                 if (end > nextStart)
                     end = nextStart;
             }
-
-            // Still too short? extend to at least a minimum
-            if (end - start < style.MinDurationSec)
-                end = start + style.MinDurationSec;
 
             var text = wb.Text;
             if (style.Uppercase)

@@ -25,6 +25,15 @@ public class FfmpegService
     private bool _validated;
     private readonly object _lock = new();
 
+    /// <summary>
+    /// Probes the duration of an audio or video file using ffprobe.
+    /// </summary>
+    public async Task<double> GetDurationAsync(string path, CancellationToken ct = default)
+    {
+        var ffmpeg = ResolveFfmpeg();
+        return await ProbeDurationAsync(ffmpeg, path, ct);
+    }
+
     public async Task ComposeAsync(CompositionOptions options, CancellationToken ct = default)
     {
         var ffmpeg = ResolveFfmpeg();

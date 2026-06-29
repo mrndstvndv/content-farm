@@ -142,14 +142,18 @@ public partial class Home
             StateHasChanged();
 
             var titleResult = await EdgeTts.SynthesizeAsync(post.Title);
-            await File.WriteAllBytesAsync(Path.Combine(dir, "title-voice.mp3"), titleResult.Audio);
+            var titleVoicePath = Path.Combine(dir, "title-voice.mp3");
+            await File.WriteAllBytesAsync(titleVoicePath, titleResult.Audio);
             
             state = GenState.SynthesizingBodyVoice;
             StateHasChanged();
             
             var bodyResult = await EdgeTts.SynthesizeAsync(post.Body);
             await File.WriteAllBytesAsync(Path.Combine(dir, "body-voice.mp3"), bodyResult.Audio);
-            await SubGen.SaveAsync(Path.Combine(dir, "subs.ass"), bodyResult.WordBoundaries);
+
+            // Probe title audio duration and shift body subtitles by it
+            var titleDuration = await Ffmpeg.GetDurationAsync(titleVoicePath);
+            await SubGen.SaveAsync(Path.Combine(dir, "subs.ass"), bodyResult.WordBoundaries, titleDuration);
 
             state = GenState.GeneratingVideo;
             StateHasChanged();
@@ -157,11 +161,12 @@ public partial class Home
             await Ffmpeg.ComposeAsync(new CompositionOptions
             {
                 VideoPath = "./vids/mc-parkour-vertical.mp4",
-                TitleAudioPath = Path.Combine(dir, "title-voice.mp3"),
+                TitleAudioPath = titleVoicePath,
                 BodyAudioPath = Path.Combine(dir, "body-voice.mp3"),
                 TitleImagePath = Path.Combine(dir, "title-card.png"),
                 SubtitlePath = Path.Combine(dir, "subs.ass"),
                 OutputPath = Path.Combine(dir, "final.mp4"),
+                TitleDurationSec = titleDuration
             });
 
             state = GenState.Complete;
