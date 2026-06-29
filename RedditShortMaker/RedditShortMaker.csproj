@@ -5,12 +5,17 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-        <RuntimeIdentifiers>win-x64;osx-x64;linux-x64</RuntimeIdentifiers>
+        <RuntimeIdentifiers>win-x64;osx-x64;linux-x64;linux-arm64</RuntimeIdentifiers>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
       <PackageReference Include="SkiaSharp" Version="4.148.0" />
     </ItemGroup>
+
+    <!-- Auto-build Tailwind CSS before build/publish (like build.rs) -->
+    <Target Name="BuildTailwindCss" BeforeTargets="BeforeBuild;BeforePublish">
+      <Exec Command="npm run css:build" WorkingDirectory="$(ProjectDir)" />
+    </Target>
 
 </Project>

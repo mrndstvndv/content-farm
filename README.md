@@ -57,13 +57,39 @@ The page (`Home.razor.cs`) gets them injected via `[Inject]` properties. No manu
 
 ## Build & run
 
-```bash
-# Prerequisites
-#   - .NET 10 SDK
-#   - ffmpeg in PATH
+### Prerequisites
 
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [ffmpeg](https://ffmpeg.org/) in PATH
+- [Node.js](https://nodejs.org/) (for Tailwind CSS v4 — the build auto-runs `npm run css:build`)
+
+### One-time setup
+
+```bash
+npm install             # installs Tailwind CSS CLI + dependencies
+```
+
+### Development
+
+```bash
 dotnet run --urls http://localhost:5000
 ```
 
-Open `http://localhost:5000`, paste a Reddit post URL, hit **Fetch Content**, tweak metadata, select a gameplay video, then **Generate Video**.
+Tailwind CSS is rebuilt automatically before every `dotnet build` or `dotnet run` (via MSBuild target). No manual CSS step needed after the initial `npm install`.
+
+### Cross-platform self-contained builds
+
+```bash
+./build-all.sh          # builds win-x64, osx-x64, linux-x64, linux-arm64
+```
+
+Output goes to `dist/<rid>/`. Each binary is self-contained with `wwwroot/` alongside it — run from anywhere:
+
+```bash
+./dist/osx-x64/RedditShortMaker --urls http://localhost:5000
+```
+
+### Usage
+
+Open the app, paste a Reddit post URL, hit **Fetch Content**, tweak metadata, select a gameplay video, then **Generate Video**.
 

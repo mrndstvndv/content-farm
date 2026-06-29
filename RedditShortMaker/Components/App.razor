@@ -6,9 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <base href="/"/>
     <ResourcePreloader/>
-    <link rel="stylesheet" href="@Assets["css/app.min.css"]"/>
-    <link rel="stylesheet" href="@Assets["app.css"]"/>
-    <link rel="stylesheet" href="@Assets["RedditShortMaker.styles.css"]"/>
+    <!-- Use direct paths for single-file self-contained deployments --->
+    <!-- (MapStaticAssets may return empty content for embedded assets in single-file mode) -->
+    <link rel="stylesheet" href="css/app.min.css"/>
+    <link rel="stylesheet" href="app.css"/>
+    <link rel="stylesheet" href="RedditShortMaker.styles.css"/>
     <ImportMap/>
     <link rel="icon" type="image/png" href="favicon.png"/>
     <HeadOutlet/>

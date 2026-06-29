@@ -4,7 +4,19 @@ using RedditShortMaker.Services;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
-var builder = WebApplication.CreateBuilder(args);
+// In self-contained published builds, the binary and wwwroot/ live in the same
+// directory. Override the content root so static files are resolved correctly
+// regardless of CWD. In dev mode (dotnet run), this check fails gracefully and
+// the default project-relative content root is used.
+var appDir = Path.GetDirectoryName(Environment.ProcessPath!)!;
+var publishDir = Path.Combine(appDir, "wwwroot");
+
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = Directory.Exists(publishDir) ? appDir : null,
+    WebRootPath = Directory.Exists(publishDir) ? publishDir : null,
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -61,7 +73,7 @@ app.UseHttpsRedirection();
 
 app.UseAntiforgery();
 
-var outputsDir = Path.Combine(Directory.GetCurrentDirectory(), "outputs");
+var outputsDir = Path.Combine(app.Environment.ContentRootPath, "outputs");
 Directory.CreateDirectory(outputsDir);
 
 app.UseStaticFiles(new StaticFileOptions
@@ -69,6 +81,10 @@ app.UseStaticFiles(new StaticFileOptions
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(outputsDir),
     RequestPath = "/outputs",
 });
+
+// Serve wwwroot/ from disk (content root is set to binary's directory at startup)
+app.UseStaticFiles();
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
